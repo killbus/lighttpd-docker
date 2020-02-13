@@ -1,0 +1,32 @@
+# Dockerfile for lighttpd
+
+# To set multiarch build for Docker hub automated build.
+FROM golang:alpine AS builder
+
+WORKDIR /go
+RUN apk add curl --no-cache
+RUN curl -L https://github.com/balena-io/qemu/releases/download/v3.0.0%2Bresin/qemu-3.0.0+resin-aarch64.tar.gz | tar zxvf - -C . && mv qemu-3.0.0+resin-aarch64/qemu-aarch64-static .
+
+FROM arm64v8/alpine:edge
+COPY --from=builder /go/qemu-aarch64-static /usr/bin/
+
+ENV LIGHTTPD_VERSION=1.4.55-r0
+
+RUN apk add --update --no-cache \
+	lighttpd=${LIGHTTPD_VERSION} \
+	lighttpd-mod_auth \
+  && rm -rf /var/cache/apk/*
+
+## workaround for bug preventing sync between VirtualBox and host
+# http://serverfault.com/questions/240038/lighttpd-broken-when-serving-from-virtualbox-shared-folder
+RUN echo server.network-backend = \"writev\" >> /etc/lighttpd/lighttpd.conf
+
+COPY etc/lighttpd/* /etc/lighttpd/
+COPY start.sh /usr/local/bin/
+
+EXPOSE 80
+
+VOLUME /var/www/localhost
+VOLUME /etc/lighttpd
+
+CMD ["start.sh"]
